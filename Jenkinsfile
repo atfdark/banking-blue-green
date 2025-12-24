@@ -11,24 +11,28 @@ pipeline {
         TG_BLUE_ARN       = 'arn:aws:elasticloadbalancing:us-east-1:XXXX:targetgroup/tg-blue/XXXX'
         TG_GREEN_ARN      = 'arn:aws:elasticloadbalancing:us-east-1:XXXX:targetgroup/tg-green/XXXX'
     }
-
     stages {
 
         stage('Checkout Code') {
             steps {
-                checkout scm
-                echo "Code pulled from GitHub"
+                git credentialsId: 'github-creds',
+                    url: 'https://github.com/atfdark/banking-blue-green.git',
+                    branch: 'main'
             }
         }
 
         stage('Deploy to GREEN') {
             steps {
-                sshagent(credentials: [SSH_CRED_ID]) {
+                withCredentials([
+                    sshUserPrivateKey(
+                        credentialsId: 'ec2-ssh-key',
+                        keyFileVariable: 'SSH_KEY'
+                    )
+                ]) {
                     sh '''
-                        echo "Deploying to GREEN server"
-                        ssh -o StrictHostKeyChecking=no $SSH_USER@$GREEN_HOST "sudo mkdir -p ${APP_DIR} && sudo chown -R ec2-user:ec2-user ${APP_DIR}"
-                        scp -o StrictHostKeyChecking=no index.html $SSH_USER@$GREEN_HOST:${APP_DIR}/index.html
-                        ssh -o StrictHostKeyChecking=no $SSH_USER@$GREEN_HOST "sudo systemctl restart httpd"
+                    chmod 600 $SSH_KEY
+                    scp -i $SSH_KEY -o StrictHostKeyChecking=no index.html \
+                        ec2-user@${GREEN_HOST}:/var/www/html/index.html
                     '''
                 }
             }
@@ -37,36 +41,29 @@ pipeline {
         stage('Health Check GREEN') {
             steps {
                 script {
-                    echo "Waiting for application startup..."
+                    echo "Waiting for GREEN to stabilize..."
                     sleep 15
 
                     def status = sh(
-                        script: "curl -o /dev/null -s -w '%{http_code}' http://${GREEN_HOST}",
+                        script: "curl -s -o /dev/null -w '%{http_code}' http://${ALB_DNS}",
                         returnStdout: true
                     ).trim()
 
                     if (status != "200") {
-                        error "Health check failed on GREEN (HTTP ${status})"
+                        error "GREEN health check FAILED"
                     }
 
-                    echo "GREEN environment is healthy"
+                    echo "GREEN health check PASSED"
                 }
             }
         }
 
         stage('Switch Traffic to GREEN') {
             steps {
-                echo "Switching ALB traffic to GREEN"
-
                 sh """
                 aws elbv2 modify-listener \
-                  --listener-arn ${ALB_LISTENER_ARN} \
-                  --default-actions Type=forward,ForwardConfig='{
-                    "TargetGroups":[
-                      {"TargetGroupArn":"${TG_GREEN_ARN}","Weight":100},
-                      {"TargetGroupArn":"${TG_BLUE_ARN}","Weight":0}
-                    ]
-                  }'
+                  --listener-arn ${LISTENER_ARN} \
+                  --default-actions Type=forward,TargetGroupArn=${TG_GREEN}
                 """
             }
         }
@@ -74,11 +71,17 @@ pipeline {
 
     post {
         failure {
-            echo "❌ Deployment failed. BLUE environment remains live."
+            echo "❌ Deployment failed. Rolling back to BLUE..."
+
+            sh """
+            aws elbv2 modify-listener \
+              --listener-arn ${LISTENER_ARN} \
+              --default-actions Type=forward,TargetGroupArn=${TG_BLUE}
+            """
         }
 
         success {
-            echo "✅ Deployment successful. Traffic switched to GREEN."
+            echo "✅ Deployment successful. GREEN is live!"
         }
     }
 }
