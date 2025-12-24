@@ -7,6 +7,7 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout Code') {
             steps {
                 echo 'Code checked out from GitHub'
@@ -15,12 +16,17 @@ pipeline {
 
         stage('Deploy to Green') {
             steps {
-                sshagent(['ec2-ssh-key']) {
+                withCredentials([sshUserPrivateKey(
+                    credentialsId: 'ec2-ssh-key',
+                    keyFileVariable: 'SSH_KEY'
+                )]) {
                     sh """
-                    scp -o StrictHostKeyChecking=no index.html \
+                    chmod 600 $SSH_KEY
+
+                    scp -i $SSH_KEY -o StrictHostKeyChecking=no index.html \
                         ${SSH_USER}@${GREEN_HOST}:/var/www/html/index.html
 
-                    ssh -o StrictHostKeyChecking=no \
+                    ssh -i $SSH_KEY -o StrictHostKeyChecking=no \
                         ${SSH_USER}@${GREEN_HOST} 'sudo systemctl restart httpd'
                     """
                 }
