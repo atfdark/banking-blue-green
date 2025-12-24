@@ -5,7 +5,7 @@ pipeline {
         SSH_USER          = 'ec2-user'
         GREEN_HOST        = '3.236.219.242'   // Green EC2 public IP
         APP_DIR           = '/var/www/html'
-        SSH_CRED_ID       = 'bank-key'        // Jenkins SSH credential ID
+        SSH_CRED_ID       = 'ec2-ssh-key'        // Jenkins SSH credential ID
 
         ALB_LISTENER_ARN  = 'arn:aws:elasticloadbalancing:us-east-1:XXXX:listener/app/banking-alb/XXXX/XXXX'
         TG_BLUE_ARN       = 'arn:aws:elasticloadbalancing:us-east-1:XXXX:targetgroup/tg-blue/XXXX'
