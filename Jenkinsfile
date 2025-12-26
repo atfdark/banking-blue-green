@@ -2,14 +2,14 @@ pipeline {
     agent any
 
     environment {
-        SSH_USER         = 'ec2-user'
-        GREEN_HOST       = '3.236.219.242'
-        APP_DIR          = '/var/www/html'
-        SSH_CRED_ID      = 'ec2-ssh-key'
+        SSH_USER = 'ec2-user'
+        GREEN_HOST = '3.236.219.242'
+        APP_DIR = '/var/www/html'
+        SSH_CRED_ID = 'ec2-ssh-key'
 
-        ALB_LISTENER_ARN = 'arn:aws:elasticloadbalancing:us-east-1:XXXX:listener/app/banking-alb/XXXX/XXXX'
-        TG_BLUE_ARN      = 'arn:aws:elasticloadbalancing:us-east-1:XXXX:targetgroup/tg-blue/XXXX'
-        TG_GREEN_ARN     = 'arn:aws:elasticloadbalancing:us-east-1:XXXX:targetgroup/tg-green/XXXX'
+        LISTENER_ARN = 'PASTE_LISTENER_ARN_HERE'
+        TG_BLUE = 'PASTE_TG_BLUE_ARN'
+        TG_GREEN = 'PASTE_TG_GREEN_ARN'
     }
 
     stages {
@@ -25,12 +25,15 @@ pipeline {
         stage('Deploy to GREEN') {
             steps {
                 withCredentials([
-                    sshUserPrivateKey(credentialsId: SSH_CRED_ID, keyFileVariable: 'SSH_KEY')
+                    sshUserPrivateKey(
+                        credentialsId: 'ec2-ssh-key',
+                        keyFileVariable: 'SSH_KEY'
+                    )
                 ]) {
                     sh '''
                     chmod 600 $SSH_KEY
-                    scp -i $SSH_KEY -o StrictHostKeyChecking=no index.html \
-                        ec2-user@${GREEN_HOST}:${APP_DIR}/index.html
+                    ssh -i $SSH_KEY -o StrictHostKeyChecking=no ec2-user@${GREEN_HOST} "mkdir -p /var/www/html"
+                    scp -i $SSH_KEY -o StrictHostKeyChecking=no index.html ec2-user@${GREEN_HOST}:/var/www/html/index.html
                     '''
                 }
             }
@@ -40,20 +43,24 @@ pipeline {
             steps {
                 sh """
                 aws elbv2 modify-listener \
-                  --listener-arn ${ALB_LISTENER_ARN} \
-                  --default-actions Type=forward,ForwardConfig='{TargetGroups=[{TargetGroupArn=${TG_GREEN_ARN},Weight=100},{TargetGroupArn=${TG_BLUE_ARN},Weight=0}]}'
+                  --listener-arn ${LISTENER_ARN} \
+                  --default-actions Type=forward,TargetGroupArn=${TG_GREEN}
                 """
             }
         }
     }
 
     post {
+        success {
+            echo "✅ GREEN deployment successful!"
+        }
+
         failure {
-            echo "Rolling back to BLUE..."
+            echo "❌ Deployment failed. Rolling back to BLUE..."
             sh """
             aws elbv2 modify-listener \
-              --listener-arn ${ALB_LISTENER_ARN} \
-              --default-actions Type=forward,ForwardConfig='{TargetGroups=[{TargetGroupArn=${TG_BLUE_ARN},Weight=100},{TargetGroupArn=${TG_GREEN_ARN},Weight=0}]}'
+              --listener-arn ${LISTENER_ARN} \
+              --default-actions Type=forward,TargetGroupArn=${TG_BLUE}
             """
         }
     }
