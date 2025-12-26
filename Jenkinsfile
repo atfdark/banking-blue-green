@@ -7,9 +7,9 @@ pipeline {
         APP_DIR = '/var/www/html'
         SSH_CRED_ID = 'ec2-ssh-key'
 
-        LISTENER_ARN = 'PASTE_LISTENER_ARN_HERE'
-        TG_BLUE = 'PASTE_TG_BLUE_ARN'
-        TG_GREEN = 'PASTE_TG_GREEN_ARN'
+        LISTENER_ARN = 'arn:aws:elasticloadbalancing:us-east-1:647258324843:listener/app/banking-alb/67ba21a6e538e97a/24b61834ce28b868'
+        TG_BLUE = 'arn:aws:elasticloadbalancing:us-east-1:647258324843:targetgroup/tg-blue/28069bd78d9fb8c7'
+        TG_GREEN = 'arn:aws:elasticloadbalancing:us-east-1:647258324843:targetgroup/tg-green/6d97b09d5a26c8ab'
     }
 
     stages {
@@ -32,8 +32,12 @@ pipeline {
                 ]) {
                     sh '''
                     chmod 600 $SSH_KEY
-                    ssh -i $SSH_KEY -o StrictHostKeyChecking=no ec2-user@${GREEN_HOST} "mkdir -p /var/www/html"
-                    scp -i $SSH_KEY -o StrictHostKeyChecking=no index.html ec2-user@${GREEN_HOST}:/var/www/html/index.html
+
+                    ssh -i $SSH_KEY -o StrictHostKeyChecking=no ec2-user@${GREEN_HOST} \
+                    "sudo mkdir -p ${APP_DIR} && sudo chown -R ec2-user:ec2-user ${APP_DIR}"
+
+                    scp -i $SSH_KEY -o StrictHostKeyChecking=no index.html \
+                    ec2-user@${GREEN_HOST}:${APP_DIR}/index.html
                     '''
                 }
             }
