@@ -6,7 +6,7 @@ pipeline {
         SSH_USER   = 'ec2-user'
         APP_DIR   = '/var/www/html'
 
-        S3_BUCKET = 'banking-artifacts-bluegreen'
+        S3_BUCKET = 'banking-bluegreen-artifacts'
         ARTIFACT  = "index-${BUILD_NUMBER}.html"
 
         LISTENER_ARN = 'arn:aws:elasticloadbalancing:us-east-1:647258324843:listener/app/banking-alb/67ba21a6e538e97a/24b61834ce28b868'
