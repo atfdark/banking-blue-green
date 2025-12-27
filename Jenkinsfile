@@ -2,13 +2,15 @@ pipeline {
     agent any
 
     environment {
-        SSH_USER = 'ec2-user'
         GREEN_HOST = '3.236.219.242'
-        APP_DIR = '/var/www/html'
-        SSH_CRED_ID = 'ec2-ssh-key'
+        SSH_USER   = 'ec2-user'
+        APP_DIR   = '/var/www/html'
+
+        S3_BUCKET = 'banking-artifacts-bluegreen'
+        ARTIFACT  = "index-${BUILD_NUMBER}.html"
 
         LISTENER_ARN = 'arn:aws:elasticloadbalancing:us-east-1:647258324843:listener/app/banking-alb/67ba21a6e538e97a/24b61834ce28b868'
-        TG_BLUE = 'arn:aws:elasticloadbalancing:us-east-1:647258324843:targetgroup/tg-blue/28069bd78d9fb8c7'
+        TG_BLUE  = 'arn:aws:elasticloadbalancing:us-east-1:647258324843:targetgroup/tg-blue/28069bd78d9fb8c7'
         TG_GREEN = 'arn:aws:elasticloadbalancing:us-east-1:647258324843:targetgroup/tg-green/6d97b09d5a26c8ab'
     }
 
@@ -22,7 +24,23 @@ pipeline {
             }
         }
 
-        stage('Deploy to GREEN') {
+        stage('Prepare Artifact') {
+            steps {
+                sh '''
+                  cp index.html ${ARTIFACT}
+                '''
+            }
+        }
+
+        stage('Upload Artifact to S3') {
+            steps {
+                sh '''
+                  aws s3 cp ${ARTIFACT} s3://${S3_BUCKET}/${ARTIFACT}
+                '''
+            }
+        }
+
+        stage('Deploy to GREEN from S3') {
             steps {
                 withCredentials([
                     sshUserPrivateKey(
@@ -32,12 +50,11 @@ pipeline {
                 ]) {
                     sh '''
                     chmod 600 $SSH_KEY
-
-                    ssh -i $SSH_KEY -o StrictHostKeyChecking=no ec2-user@${GREEN_HOST} \
-                    "sudo mkdir -p ${APP_DIR} && sudo chown -R ec2-user:ec2-user ${APP_DIR}"
-
-                    scp -i $SSH_KEY -o StrictHostKeyChecking=no index.html \
-                    ec2-user@${GREEN_HOST}:${APP_DIR}/index.html
+                    ssh -i $SSH_KEY ec2-user@${GREEN_HOST} "
+                      sudo mkdir -p /var/www/html &&
+                      sudo chown -R ec2-user:ec2-user /var/www/html &&
+                      aws s3 cp s3://${S3_BUCKET}/${ARTIFACT} /var/www/html/index.html
+                    "
                     '''
                 }
             }
@@ -56,7 +73,7 @@ pipeline {
 
     post {
         success {
-            echo "✅ GREEN deployment successful!"
+            echo "✅ Deployment successful via S3 artifact!"
         }
 
         failure {
