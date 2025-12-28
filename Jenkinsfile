@@ -4,7 +4,7 @@ pipeline {
     environment {
         GREEN_HOST = '3.237.27.218'
         SSH_USER   = 'ec2-user'
-        APP_DIR   = '/var/www/html'
+        APP_DIR    = '/var/www/html'
 
         S3_BUCKET = 'banking-bluegreen-artifacts'
         ARTIFACT  = "index-${BUILD_NUMBER}.html"
@@ -15,7 +15,6 @@ pipeline {
     }
 
     stages {
-
         stage('Checkout Code') {
             steps {
                 git credentialsId: 'github-creds',
@@ -50,7 +49,8 @@ pipeline {
                 ]) {
                     sh '''
                     chmod 600 $SSH_KEY
-                    ssh -i $SSH_KEY ec2-user@${GREEN_HOST} "
+                    # Added -o StrictHostKeyChecking=no below to skip the manual trust prompt
+                    ssh -o StrictHostKeyChecking=no -i $SSH_KEY ec2-user@${GREEN_HOST} "
                       sudo mkdir -p /var/www/html &&
                       sudo chown -R ec2-user:ec2-user /var/www/html &&
                       aws s3 cp s3://${S3_BUCKET}/${ARTIFACT} /var/www/html/index.html
