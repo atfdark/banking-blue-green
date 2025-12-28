@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        GREEN_HOST = '3.236.219.242'
+        GREEN_HOST = '3.237.27.218'
         SSH_USER   = 'ec2-user'
         APP_DIR   = '/var/www/html'
 
