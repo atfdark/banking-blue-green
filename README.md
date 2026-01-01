@@ -121,7 +121,7 @@ No hardcoded AWS credentials in pipeline
 Principle of least privilege followed
 
 📁 Repository Structure
-banking-blue-green/
+banking-blue-green
 │
 ├── index.html          # Banking website
 ├── Jenkinsfile         # Jenkins CI/CD pipeline
